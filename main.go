@@ -6,6 +6,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/vector"
 	"image/color"
+	"math/rand/v2"
 )
 
 // TODO: CRIAR A "MACA" QUE AO COMER O RABO (TAIL) CRESCE
@@ -18,6 +19,11 @@ const (
 	debug           = true
 )
 
+type ApplePos struct {
+	x int
+	y int
+}
+
 type Game struct {
 	snake            *ebiten.Image
 	playerX, playerY float64
@@ -25,6 +31,8 @@ type Game struct {
 	limits           *ebiten.Image
 	rx, ry           float32
 	sh, sw           int
+	apple_spot       *ApplePos
+	apple            *ebiten.Image
 }
 
 func (g *Game) Update() error {
@@ -69,10 +77,33 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	if debug {
 		ebitenutil.DebugPrintAt(screen, "Player Position: "+fmt.Sprintf("%0.2f", g.playerX)+" X "+fmt.Sprintf("%0.2f", g.playerY), limitHorizontal-200, limitVertical-30)
 	}
+	g.SpawnApple(screen)
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
 	return 640, 480
+}
+
+func (g *Game) SpawnApple(screen *ebiten.Image) {
+	appleOpts := &ebiten.DrawImageOptions{}
+	appleOpts.GeoM.Translate(float64(g.apple_spot.x), float64(g.apple_spot.y))
+	screen.DrawImage(g.apple, appleOpts)
+}
+
+func GenerateRandomApplePosition() ApplePos {
+	x_min_pos := 15
+	x_max_pos := limitHorizontal - 15
+	y_min_pos := 10
+	y_max_pos := limitVertical - 15
+
+	rangeSizeX := x_max_pos - x_min_pos + 1
+	rangeSizeY := y_max_pos - y_min_pos + 1
+
+	randCoordX := rand.IntN(rangeSizeX) + x_min_pos
+	randCoordY := rand.IntN(rangeSizeY) + y_min_pos
+
+	randOutput := ApplePos{x: randCoordX, y: randCoordY}
+	return randOutput
 }
 
 func NewGame() *Game {
@@ -82,8 +113,12 @@ func NewGame() *Game {
 	g.playerY = float64(screenHeight / 2)
 
 	g.snake = ebiten.NewImage(10, 10)
-	g.snake.Fill(color.RGBA{255, 0, 0, 255}) // Ponto vermelho para destacar do fundo
+	g.snake.Fill(color.RGBA{179, 199, 57, 255})
 
+	g.apple = ebiten.NewImage(5, 5)
+	g.apple.Fill(color.RGBA{255, 0, 0, 255})
+	apple_pos := GenerateRandomApplePosition()
+	g.apple_spot = &apple_pos
 	return g
 }
 
