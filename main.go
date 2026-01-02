@@ -9,124 +9,139 @@ import (
 	"math/rand/v2"
 )
 
-// TODO: CRIAR A "MACA" QUE AO COMER O RABO (TAIL) CRESCE
-
 const (
 	screenWidth     = 640
-	screenHeight    = 480
-	limitHorizontal = screenWidth - 20
-	limitVertical   = screenHeight - 20
-	debug           = true
+	screenHeight    = 380
+	gridSize        = 20
+	margin          = 60
+	limitHorizontal = screenWidth - (margin * 2)
+	limitVertical   = screenHeight - (margin * 2)
 )
 
-type ApplePos struct {
-	x int
-	y int
+type SnakePart struct {
+	X, Y float64
 }
 
 type Game struct {
-	snake            *ebiten.Image
-	playerX, playerY float64
-	tail             int
-	limits           *ebiten.Image
-	rx, ry           float32
-	sh, sw           int
-	apple_spot       *ApplePos
-	apple            *ebiten.Image
+	snake      []SnakePart
+	apple      SnakePart
+	dirX, dirY float64
+	timer      int
+	moveSpeed  int
+	score      int // Novo campo para o placar
+}
+
+func NewGame() *Game {
+	g := &Game{
+		snake: []SnakePart{
+			{X: margin + (gridSize * 5), Y: margin + (gridSize * 5)},
+		},
+		dirX:      gridSize,
+		dirY:      0,
+		moveSpeed: 8,
+		score:     0,
+	}
+	g.spawnApple()
+	return g
+}
+
+func (g *Game) spawnApple() {
+	cols := limitHorizontal / gridSize
+	rows := limitVertical / gridSize
+	g.apple.X = float64(rand.IntN(cols))*gridSize + margin
+	g.apple.Y = float64(rand.IntN(rows))*gridSize + margin
 }
 
 func (g *Game) Update() error {
-	if ebiten.IsKeyPressed(ebiten.KeyArrowUp) || ebiten.IsKeyPressed(ebiten.KeyW) {
-		g.playerY -= 4
+	// Controles
+	if (ebiten.IsKeyPressed(ebiten.KeyArrowUp) || ebiten.IsKeyPressed(ebiten.KeyW)) && g.dirY == 0 {
+		g.dirX, g.dirY = 0, -gridSize
+	} else if (ebiten.IsKeyPressed(ebiten.KeyArrowDown) || ebiten.IsKeyPressed(ebiten.KeyS)) && g.dirY == 0 {
+		g.dirX, g.dirY = 0, gridSize
+	} else if (ebiten.IsKeyPressed(ebiten.KeyArrowLeft) || ebiten.IsKeyPressed(ebiten.KeyA)) && g.dirX == 0 {
+		g.dirX, g.dirY = -gridSize, 0
+	} else if (ebiten.IsKeyPressed(ebiten.KeyArrowRight) || ebiten.IsKeyPressed(ebiten.KeyD)) && g.dirX == 0 {
+		g.dirX, g.dirY = gridSize, 0
 	}
-	if ebiten.IsKeyPressed(ebiten.KeyArrowDown) || ebiten.IsKeyPressed(ebiten.KeyS) {
-		g.playerY += 4
-	}
-	if ebiten.IsKeyPressed(ebiten.KeyArrowRight) || ebiten.IsKeyPressed(ebiten.KeyD) {
-		g.playerX += 4
-	}
-	if ebiten.IsKeyPressed(ebiten.KeyArrowLeft) || ebiten.IsKeyPressed(ebiten.KeyA) {
-		g.playerX -= 4
-	}
-	if g.playerX < 10.0 || g.playerX > limitHorizontal {
-		//TODO mata tudo e reseta
-		g.playerX = float64(screenWidth / 2)
-		g.playerY = float64(screenHeight / 2)
-		// TODO criar algo como resetaftercolition()
-	}
-	if g.playerY < 10 || g.playerY > limitVertical {
-		g.playerX = float64(screenWidth / 2)
-		g.playerY = float64(screenHeight / 2)
+
+	g.timer++
+	if g.timer >= g.moveSpeed {
+		g.timer = 0
+
+		oldHead := g.snake[0]
+		newHead := SnakePart{X: oldHead.X + g.dirX, Y: oldHead.Y + g.dirY}
+
+		// Lógica de comer e crescer
+		if newHead.X == g.apple.X && newHead.Y == g.apple.Y {
+			g.snake = append([]SnakePart{newHead}, g.snake...)
+			g.score += 10 // Aumenta o placar
+			g.spawnApple()
+		} else {
+			g.snake = append([]SnakePart{newHead}, g.snake[:len(g.snake)-1]...)
+		}
+
+		// Morte por colisão com bordas
+		head := g.snake[0]
+		if head.X < margin || head.X >= margin+limitHorizontal || head.Y < margin || head.Y >= margin+limitVertical {
+			*g = *NewGame()
+		}
+
+		// Morte por colisão com o próprio corpo (Auto-canibalismo)
+		for i := 1; i < len(g.snake); i++ {
+			if head.X == g.snake[i].X && head.Y == g.snake[i].Y {
+				*g = *NewGame()
+			}
+		}
 	}
 	return nil
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
-	screen.Fill(color.RGBA{0, 0, 0, 255}) // Fundo preto
+	screen.Fill(color.Black)
 
-	g.sw = screen.Bounds().Dx()
-	g.sh = screen.Bounds().Dy()
-	g.rx = float32(g.sw)/2 - float32(limitHorizontal)/2
-	g.ry = float32(g.sh)/2 - float32(limitVertical)/2
-	vector.StrokeRect(screen, g.rx, g.ry, float32(limitHorizontal), float32(limitVertical), 2, color.White, true)
+	// --- INTERFACE E LOGS ---
 
-	snakeOpts := &ebiten.DrawImageOptions{}
-	snakeOpts.GeoM.Translate(float64(g.playerX), float64(g.playerY))
-	screen.DrawImage(g.snake, snakeOpts)
+	// 1. Placar (Score) no topo
+	scoreMsg := fmt.Sprintf("PONTUAÇÃO: %d", g.score)
+	ebitenutil.DebugPrintAt(screen, scoreMsg, screenWidth/2-40, 20)
 
-	if debug {
-		ebitenutil.DebugPrintAt(screen, "Player Position: "+fmt.Sprintf("%0.2f", g.playerX)+" X "+fmt.Sprintf("%0.2f", g.playerY), limitHorizontal-200, limitVertical-30)
+	// 2. Logs de Debug (Melhorados)
+	statusMsg := fmt.Sprintf(
+		"Cobra: %d partes\nCabeça: (%.0f, %.0f)\nMaçã: (%.0f, %.0f)\nFPS: %.2f",
+		len(g.snake),
+		g.snake[0].X, g.snake[0].Y,
+		g.apple.X, g.apple.Y,
+		ebiten.ActualFPS(),
+	)
+	ebitenutil.DebugPrintAt(screen, statusMsg, 15, 15)
+
+	// --- ELEMENTOS DO JOGO ---
+
+	// Moldura
+	vector.StrokeRect(screen, float32(margin), float32(margin), float32(limitHorizontal), float32(limitVertical), 2, color.White, true)
+
+	// Maçã
+	vector.DrawFilledRect(screen, float32(g.apple.X), float32(g.apple.Y), gridSize-2, gridSize-2, color.RGBA{255, 0, 0, 255}, true)
+
+	// Cobra
+	for i, part := range g.snake {
+		c := color.RGBA{255, 255, 255, 255}
+		if i == 0 {
+			c = color.RGBA{150, 255, 150, 255} // Cabeça verde clara
+		}
+		vector.DrawFilledRect(screen, float32(part.X), float32(part.Y), gridSize-2, gridSize-2, c, true)
 	}
-	g.SpawnApple(screen)
 }
 
-func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
-	return 640, 480
-}
-
-func (g *Game) SpawnApple(screen *ebiten.Image) {
-	appleOpts := &ebiten.DrawImageOptions{}
-	appleOpts.GeoM.Translate(float64(g.apple_spot.x), float64(g.apple_spot.y))
-	screen.DrawImage(g.apple, appleOpts)
-}
-
-func GenerateRandomApplePosition() ApplePos {
-	x_min_pos := 15
-	x_max_pos := limitHorizontal - 15
-	y_min_pos := 10
-	y_max_pos := limitVertical - 15
-
-	rangeSizeX := x_max_pos - x_min_pos + 1
-	rangeSizeY := y_max_pos - y_min_pos + 1
-
-	randCoordX := rand.IntN(rangeSizeX) + x_min_pos
-	randCoordY := rand.IntN(rangeSizeY) + y_min_pos
-
-	randOutput := ApplePos{x: randCoordX, y: randCoordY}
-	return randOutput
-}
-
-func NewGame() *Game {
-	g := &Game{}
-	//centraliza o spawn do ponto no centro da tela
-	g.playerX = float64(screenWidth / 2)
-	g.playerY = float64(screenHeight / 2)
-
-	g.snake = ebiten.NewImage(10, 10)
-	g.snake.Fill(color.RGBA{179, 199, 57, 255})
-
-	g.apple = ebiten.NewImage(5, 5)
-	g.apple.Fill(color.RGBA{255, 0, 0, 255})
-	apple_pos := GenerateRandomApplePosition()
-	g.apple_spot = &apple_pos
-	return g
+func (g *Game) Layout(w, h int) (int, int) {
+	return screenWidth, screenHeight
 }
 
 func main() {
 	ebiten.SetWindowSize(screenWidth, screenHeight)
-	g := NewGame()
-	err := ebiten.RunGame(g)
-	if err != nil {
+	ebiten.SetWindowTitle("Snake Go - Refatorado")
+	if err := ebiten.RunGame(NewGame()); err != nil {
 		panic(err)
 	}
 }
+
