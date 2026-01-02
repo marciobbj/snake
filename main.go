@@ -28,7 +28,7 @@ type Game struct {
 	dirX, dirY float64
 	timer      int
 	moveSpeed  int
-	score      int // Novo campo para o placar
+	score      int
 }
 
 func NewGame() *Game {
@@ -53,7 +53,7 @@ func (g *Game) spawnApple() {
 }
 
 func (g *Game) Update() error {
-	// Controles
+
 	if (ebiten.IsKeyPressed(ebiten.KeyArrowUp) || ebiten.IsKeyPressed(ebiten.KeyW)) && g.dirY == 0 {
 		g.dirX, g.dirY = 0, -gridSize
 	} else if (ebiten.IsKeyPressed(ebiten.KeyArrowDown) || ebiten.IsKeyPressed(ebiten.KeyS)) && g.dirY == 0 {
@@ -71,10 +71,9 @@ func (g *Game) Update() error {
 		oldHead := g.snake[0]
 		newHead := SnakePart{X: oldHead.X + g.dirX, Y: oldHead.Y + g.dirY}
 
-		// Lógica de comer e crescer
 		if newHead.X == g.apple.X && newHead.Y == g.apple.Y {
 			g.snake = append([]SnakePart{newHead}, g.snake...)
-			g.score += 10 // Aumenta o placar
+			g.score += 10
 			g.spawnApple()
 		} else {
 			g.snake = append([]SnakePart{newHead}, g.snake[:len(g.snake)-1]...)
@@ -86,7 +85,7 @@ func (g *Game) Update() error {
 			*g = *NewGame()
 		}
 
-		// Morte por colisão com o próprio corpo (Auto-canibalismo)
+		//Morte por colisão com o próprio corpo
 		for i := 1; i < len(g.snake); i++ {
 			if head.X == g.snake[i].X && head.Y == g.snake[i].Y {
 				*g = *NewGame()
@@ -99,13 +98,11 @@ func (g *Game) Update() error {
 func (g *Game) Draw(screen *ebiten.Image) {
 	screen.Fill(color.Black)
 
-	// --- INTERFACE E LOGS ---
-
-	// 1. Placar (Score) no topo
+	// 1. Placar no topo
 	scoreMsg := fmt.Sprintf("PONTUAÇÃO: %d", g.score)
 	ebitenutil.DebugPrintAt(screen, scoreMsg, screenWidth/2-40, 20)
 
-	// 2. Logs de Debug (Melhorados)
+	// 2. Logs de Debug
 	statusMsg := fmt.Sprintf(
 		"Cobra: %d partes\nCabeça: (%.0f, %.0f)\nMaçã: (%.0f, %.0f)\nFPS: %.2f",
 		len(g.snake),
@@ -114,8 +111,6 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		ebiten.ActualFPS(),
 	)
 	ebitenutil.DebugPrintAt(screen, statusMsg, 15, 15)
-
-	// --- ELEMENTOS DO JOGO ---
 
 	// Moldura
 	vector.StrokeRect(screen, float32(margin), float32(margin), float32(limitHorizontal), float32(limitVertical), 2, color.White, true)
@@ -139,9 +134,8 @@ func (g *Game) Layout(w, h int) (int, int) {
 
 func main() {
 	ebiten.SetWindowSize(screenWidth, screenHeight)
-	ebiten.SetWindowTitle("Snake Go - Refatorado")
+	ebiten.SetWindowTitle("Snake")
 	if err := ebiten.RunGame(NewGame()); err != nil {
 		panic(err)
 	}
 }
-
